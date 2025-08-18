@@ -10,10 +10,13 @@ globals
 
  QD QS QW  QSTotal QSBlack QSBlackTotal  Emission  ;; service variables
 
+ GreenSales BlackSales    ;;  Total sales
+ GreenProfit BlackProfit  ;;  Total Profit
+
  TAXTotal            ;; taxes cumulative amount, exclude ETAX
  TotalCostofCleaning ;; Total Cost of Cleaning
- ETAX                ;;  Ecology Taxes per one firm (proportion of one period q-ty sold)
- ETAXTotal           ;;  Total Ecology Taxes
+ ETAX                ;; Ecology Taxes per one firm (proportion of one period q-ty sold)
+ ETAXTotal           ;; Total Ecology Taxes
  SubsidyTotal        ;; Sum of Subsidies to Firms
  BudgetBalance       ;; Balance
 ]
@@ -65,6 +68,11 @@ to setup
   set Emission 0
   set ETAXTotal 0
   set p0 1
+
+  set GreenSales 0
+  set BlackSales 0
+  set GreenProfit 0
+  set BlackProfit 0
 
   ask firms with [resource = 0 or Qt = 0] [let LWho who
                                            ask products with [owner = LWho] [die]
@@ -251,13 +259,25 @@ to QS-rule ;; after previous market step
 end
 ;;============================================================================
 to ProfitLoss
+
+  ;;set GreenProfit 0    ;; 4 per Month profit calculation
+  ;;set BlackProfit 0
+
     ask firms with [inmarket]
 [ set Profit QM * (p0 - c1) - Acost
     if Profit > 0 [set Profit Profit * (1 - TAX% / 100) set TAXTotal TAXTotal + Profit * (TAX% / 100)]
   set ProfitCumulative precision (ProfitCumulative + Profit) 0
+  let LWho who
+    if [cathegory] of products with [owner = LWho] = ["Black"] [set BlackProfit BlackProfit + Profit
+                                                               set  BlackSales BlackSales + QM * p0
+                                                               ]
+    if [cathegory] of products with [owner = LWho] = ["Green"] [set GreenProfit GreenProfit + Profit
+                                                               set  GreenSales GreenSales + QM * p0
+                                                               ]
+
 ]
 end
-;;============================================================================ Add1Firm
+;;========================================================================= Add1Firm
 to Add1Firm
   create-ordered-firms 1
   [
@@ -283,8 +303,8 @@ to FirmsSettings                    ;; call from firm context !!!!!
   ;;set ACost CostPerMonth
   set ACost  max list (precision (random-normal CostPerMonth  CPMVariation) 1) 0
   set QBE precision (ACost / (P0 - c1)) 1
-  set Qmax precision (5 * QBE) 0
-  set Qt precision (0.5 * Qmax) 0
+  set Qmax precision (Qmax/QBE * QBE) 0     ;; Qmax/QBE is slider name!!!!
+  set Qt precision (Qt/Qmax * Qmax) 0       ;; Qt/Qmax is slider name!!!!
   set Resource Qmax * (random 26)           ;; 26 или (15 + random 11)    ;; NEW 29/06/25 30/06
   (ifelse
     Strategy = "Agressive" [set Strat "A"]
@@ -316,11 +336,11 @@ to Ecology2
   if QSBlack > 0 [set QSBlackTotal QSBlackTotal + QSBlack set Emission Emission + QSBlack]
 
   set Emission Emission * .995  ;; если производства нет загрязнение медленно уменьшается, варианты .99 .999
-  ;; show Emission
+
 end
 ;;============================================================================
 to Cleaning
-  if Emission > 0 [set Emission Emission * .9 ;;;  ] ;;
+  if Emission > 0 [set Emission Emission * .9
                    set TotalCostofCleaning TotalCostofCleaning + CostofCleaning]
   ;;  загрязнение уменьшается в результате очистки
 end
@@ -352,7 +372,10 @@ ask firms with [inmarket]
       Strat = "C" [set Corrector .2]    ;; .25
       ;; elsecommands
       [ show "Error Corrector EquipmentDecision"])
-            let EnPower precision (Corrector * ProfitCumulative / 2500) 0 write "EnPower" show EnPower
+
+        ;;;                 EngineCost slider, Cost of 1000 units per Month Engine
+
+            let EnPower precision (Corrector * ProfitCumulative / EngineCost) 0 write "EnPower" show EnPower
             let LWho who           ;; NEW 22/07/25
 
     ;; Corrector * ProfitCumulative is Upgrade Fund
@@ -364,7 +387,7 @@ ask firms with [inmarket]
                      set Resource QMax * 25                                   ;;; NEW ENGINE
                      set ProfitCumulative ProfitCumulative - EnPower * 2500   ;;; NEW ENGINE for Strat setted part of Firm's Profit
                      set Qt min list Qt Qmax                                  ;;; NEW ENGINE
-                     set SumForSubsidy EnPower * 2500
+                     set SumForSubsidy EnPower * EngineCost
                     ask products with [owner = Lwho] [die]                           ;; NEW 22/07/25
                     let Local1 Who ;; Of Firm
                     hatch-products 1
@@ -531,7 +554,7 @@ FirmsQty
 FirmsQty
 1
 20
-10.0
+11.0
 1
 1
 NIL
@@ -625,7 +648,7 @@ P0
 P0
 1
 5
-0.98
+0.776
 1
 1
 NIL
@@ -755,9 +778,9 @@ true
 false
 "" ""
 PENS
-"default" 1.0 0 -16777216 true "" "plot sum [ProfitCumulative] of firms with [not inmarket]"
+"default" 1.0 0 -5298144 true "" "plot sum [ProfitCumulative] of firms with [not inmarket]"
 "pen-1" 1.0 0 -7500403 true "" "plot sum [ProfitCumulative] of firms with [inmarket]"
-"pen-2" 1.0 0 -13840069 true "" "plot 0"
+"pen-2" 1.0 0 -14070903 true "" "plot 0"
 
 BUTTON
 3
@@ -820,42 +843,6 @@ true false
 0
 
 PLOT
-1
-500
-161
-620
-Losses
-NIL
-NIL
-0.0
-10.0
-0.0
-10.0
-true
-false
-"set-plot-x-range -10000 0\nset-histogram-num-bars 20" ""
-PENS
-"default" 1.0 1 -16777216 true "" "histogram [ProfitCumulative] of firms"
-
-PLOT
-161
-500
-321
-620
-Profit
-NIL
-NIL
-0.0
-10.0
-0.0
-10.0
-true
-false
-"" ""
-PENS
-"default" 1.0 1 -16777216 true "set-plot-x-range 0 30000\nset-histogram-num-bars 20" "histogram [ProfitCumulative] of firms"
-
-PLOT
 369
 521
 708
@@ -887,23 +874,6 @@ CostPerMonth
 1
 NIL
 HORIZONTAL
-
-BUTTON
-1184
-51
-1242
-85
-Cleaning
-Cleaning
-NIL
-1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
-1
 
 SLIDER
 164
@@ -963,7 +933,7 @@ CPMVariation
 CPMVariation
 0
 1000
-400.0
+200.0
 100
 1
 NIL
@@ -995,7 +965,7 @@ CHOOSER
 Strategy
 Strategy
 "Agressive" "Neutral" "Conservative"
-2
+1
 
 PLOT
 800
@@ -1041,10 +1011,10 @@ true false
 0
 
 CHOOSER
-4
-315
-104
-360
+3
+405
+103
+450
 FirmValue
 FirmValue
 "Resource" "Qt" "Qbe" "QMax" "QM" "Strat" "CostPerMonth" "ProfitСumulative" "Last Month Profit"
@@ -1052,9 +1022,9 @@ FirmValue
 
 CHOOSER
 3
-368
+452
 104
-413
+497
 ProductValue
 ProductValue
 "Stock" "Price"
@@ -1068,7 +1038,7 @@ CHOOSER
 SubsidyON
 SubsidyON
 true false
-0
+1
 
 SLIDER
 171
@@ -1124,6 +1094,89 @@ precision QSBlack 0
 17
 1
 11
+
+SLIDER
+3
+294
+122
+327
+Qt/Qmax
+Qt/Qmax
+0.1
+1
+0.5
+.1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+3
+328
+95
+361
+Qmax/QBE
+Qmax/QBE
+1
+10
+5.0
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+2
+364
+111
+397
+EngineCost
+EngineCost
+1000
+10000
+2500.0
+500
+1
+NIL
+HORIZONTAL
+
+PLOT
+165
+501
+325
+621
+Total Green / Black Profit
+NIL
+NIL
+0.0
+10.0
+0.0
+10.0
+true
+false
+"" ""
+PENS
+"default" 1.0 0 -14439633 true "" "plot GreenProfit"
+"pen-1" 1.0 0 -16777216 true "" "plot BlackProfit"
+
+PLOT
+4
+502
+164
+622
+Green / Black Sales
+NIL
+NIL
+0.0
+10.0
+0.0
+10.0
+true
+false
+"" ""
+PENS
+"default" 1.0 0 -16777216 true "" "plot BlackSales"
+"pen-1" 1.0 0 -14439633 true "" "plot GreenSales"
 
 @#$#@#$#@
 ## WHAT IS IT?
